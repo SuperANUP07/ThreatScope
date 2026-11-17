@@ -7,4 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LogEventRepository extends JpaRepository<LogEvent, Long> {
     Page<LogEvent> findBySourceIp(String sourceIp, Pageable pageable);
+    List<LogEvent> findByEventTypeOrderByEventTimeAsc(EventType eventType);
 }

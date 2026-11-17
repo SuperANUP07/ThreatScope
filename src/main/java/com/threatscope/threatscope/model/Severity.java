@@ -1,4 +1,3 @@
 package com.threatscope.threatscope.model;
 
-public class Severity {
-}
+public enum Severity { LOW, MEDIUM, HIGH, CRITICAL }
