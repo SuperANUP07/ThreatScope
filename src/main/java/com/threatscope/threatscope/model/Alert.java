@@ -5,10 +5,14 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "alerts", indexes = {
-        @Index(name = "idx_alert_ip", columnList = "sourceIp"),
-        @Index(name = "idx_alert_created", columnList = "createdAt")
-})
+@Table(name = "alerts",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_alert_rule_ip_window",
+                columnNames = {"ruleName", "sourceIp", "windowStart"}),
+        indexes = {
+                @Index(name = "idx_alert_ip", columnList = "sourceIp"),
+                @Index(name = "idx_alert_created", columnList = "createdAt")
+        })
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 public class Alert {

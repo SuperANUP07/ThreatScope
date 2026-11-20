@@ -24,13 +24,14 @@ public class BruteForceRule implements DetectionRule {
     private long windowSeconds;
 
     @Override
-    public String name() { return "BRUTE_FORCE_LOGIN"; }
+    public String name() {
+        return "BRUTE_FORCE_LOGIN";
+    }
 
     @Override
     public List<Alert> evaluate() {
         List<LogEvent> failed = logRepository.findByEventTypeOrderByEventTimeAsc(EventType.LOGIN_FAILED);
 
-        // Group failed logins by source IP (each list stays sorted by time)
         Map<String, List<LogEvent>> byIp = failed.stream()
                 .filter(e -> e.getSourceIp() != null)
                 .collect(Collectors.groupingBy(LogEvent::getSourceIp));
@@ -39,44 +40,43 @@ public class BruteForceRule implements DetectionRule {
 
         for (Map.Entry<String, List<LogEvent>> entry : byIp.entrySet()) {
             List<LogEvent> events = entry.getValue();
+            int left = 0, right = 0;
 
-            // Sliding window with two pointers: find the busiest window for this IP
-            int left = 0, best = 0, bestLeft = 0, bestRight = 0;
-            for (int right = 0; right < events.size(); right++) {
-                while (Duration.between(events.get(left).getEventTime(),
-                        events.get(right).getEventTime()).getSeconds() > windowSeconds) {
-                    left++;
-                }
-                int count = right - left + 1;
-                if (count > best) {
-                    best = count;
-                    bestLeft = left;
-                    bestRight = right;
-                }
-            }
+            while (right < events.size()) {
+                // shrink the window until it fits inside windowSeconds
+                while (seconds(events.get(left), events.get(right)) > windowSeconds) left++;
 
-            if (best >= threshold) {
-                LocalDateTime start = events.get(bestLeft).getEventTime();
-                LocalDateTime end = events.get(bestRight).getEventTime();
-                alerts.add(Alert.builder()
-                        .ruleName(name())
-                        .severity(severityFor(best))
-                        .sourceIp(entry.getKey())
-                        .description(best + " failed logins from " + entry.getKey()
-                                + " within " + windowSeconds + "s")
-                        .eventCount(best)
-                        .windowStart(start)
-                        .windowEnd(end)
-                        .createdAt(LocalDateTime.now())
-                        .build());
+                if (right - left + 1 >= threshold) {
+                    // extend to include every event still inside this burst
+                    int end = right;
+                    while (end + 1 < events.size()
+                            && seconds(events.get(left), events.get(end + 1)) <= windowSeconds) end++;
+
+                    int count = end - left + 1;
+                    alerts.add(Alert.builder()
+                            .ruleName(name())
+                            .severity(severityFor(count))
+                            .sourceIp(entry.getKey())
+                            .description(count + " failed logins from " + entry.getKey()
+                                    + " within " + windowSeconds + "s")
+                            .eventCount(count)
+                            .windowStart(events.get(left).getEventTime())
+                            .windowEnd(events.get(end).getEventTime())
+                            .createdAt(LocalDateTime.now())
+                            .build());
+
+                    left = end + 1;    // start fresh after this burst
+                    right = end + 1;
+                } else {
+                    right++;
+                }
             }
         }
         return alerts;
     }
 
-    private Severity severityFor(int count) {
-        if (count >= 20) return Severity.CRITICAL;
-        if (count >= 10) return Severity.HIGH;
-        return Severity.MEDIUM;
+    private long seconds(LogEvent a, LogEvent b) {
+        return Duration.between(a.getEventTime(), b.getEventTime()).getSeconds();
     }
 }
+

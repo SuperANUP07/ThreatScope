@@ -33,12 +33,13 @@ public class SshAuthLogParser implements LogParser {
     public Optional<LogEvent> parse(String line, int year) {
         if (line == null || line.isBlank()) return Optional.empty();
 
+
         Matcher sys = SYSLOG.matcher(line.trim());
         if (!sys.matches()) return Optional.empty();
 
         String process = sys.group(5);
         String message = sys.group(6);
-        if (!process.equals("sshd")) return Optional.empty();
+        if (!process.startsWith("sshd")) return Optional.empty();
 
         LocalDateTime time;
         try {
@@ -54,7 +55,7 @@ public class SshAuthLogParser implements LogParser {
         if ((m = FAILED.matcher(message)).find()) {
             type = EventType.LOGIN_FAILED;
         } else if ((m = INVALID_USER.matcher(message)).find()) {
-            type = EventType.LOGIN_FAILED;
+            type = EventType.OTHER;   // changed: avoids counting the same attempt twice
         } else if ((m = ACCEPTED.matcher(message)).find()) {
             type = EventType.LOGIN_SUCCESS;
         } else {
