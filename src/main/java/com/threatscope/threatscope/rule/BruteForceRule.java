@@ -79,4 +79,20 @@ public class BruteForceRule implements DetectionRule {
         if (count >= 10) return Severity.HIGH;
         return Severity.MEDIUM;
     }
+    @Test
+    void reportsTwoSeparateBurstsFromSameIp() {
+        List<LogEvent> events = new java.util.ArrayList<>();
+        LocalDateTime t = LocalDateTime.of(2026, 11, 11, 10, 0, 0);
+        for (int i = 0; i < 6; i++) events.add(failureAt("3.3.3.3", t.plusSeconds(i * 2L)));
+        // second burst one hour later
+        for (int i = 0; i < 6; i++) events.add(failureAt("3.3.3.3", t.plusHours(1).plusSeconds(i * 2L)));
+
+        List<Alert> alerts = ruleWith(events).evaluate();
+        assertEquals(2, alerts.size());
+    }
+
+    private LogEvent failureAt(String ip, LocalDateTime time) {
+        return LogEvent.builder().sourceIp(ip)
+                .eventType(EventType.LOGIN_FAILED).eventTime(time).build();
+    }
 }
